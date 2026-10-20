@@ -1,0 +1,23 @@
+{
+  "name": "Piano Tiles",
+  "id": "pianotiles",
+  "version": "0.1.0",
+  "description": "Piano Tiles for the pads: tiles fall in four lanes, the pads show what comes, each tile plays the next note of a public-domain tune on a small piano synth; levels speed it up, best scores saved on the card; the one app of the pianotiles firmware kit",
+  "category": "games",
+  "icon": "pianotiles.png",
+  "component_path": "components/crosspad-pianotiles",
+  "kits": [
+    "pianotiles"
+  ],
+  "platforms": [
+    "pc",
+    "esp-idf"
+  ],
+  "requires": {
+    "crosspad-core": ">=2.0.0,<3.0.0",
+    "crosspad-gui": ">=2.0.0,<3.0.0"
+  },
+  "changelog": [
+    "0.1.0: Piano Tiles as a CrossPad app: six songs, five levels each, hold tiles, the pads mirror the field, a piano-like synth on the audio module, progress in crosspad/pianotiles/ on the card, pause menu with Quit back to the other firmware slot"
+  ]
+}
