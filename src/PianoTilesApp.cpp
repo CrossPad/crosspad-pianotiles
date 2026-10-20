@@ -18,16 +18,19 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
 
-#ifdef _WIN32
-#include <direct.h>
+#if defined(ESP_PLATFORM)
+  #include <freertos/FreeRTOS.h>
+  #include <freertos/semphr.h>
+  #include <freertos/task.h>
 #else
-#include <sys/stat.h>
+  #include "FreeRTOS.h"
+  #include "semphr.h"
+  #include "task.h"
 #endif
 
 #include <crosspad/app/AppRegistrar.hpp>
@@ -35,6 +38,7 @@
 #include <crosspad/pad/IPadLogicHandler.hpp>
 #include <crosspad/pad/PadManager.hpp>
 #include <crosspad/platform/IClock.hpp>
+#include <crosspad/platform/IFileSystem.hpp>
 #include <crosspad/platform/PlatformServices.hpp>
 
 #include "crosspad-gui/components/app_icon.h"
@@ -242,12 +246,7 @@ const pianotiles::Song& song(int i) { return pianotiles::songs()[i]; }
 bool makeDirs(const std::string& dir) {
     for (size_t at = 1; at <= dir.size(); ++at) {
         if (at != dir.size() && dir[at] != '/') continue;
-        const std::string part = dir.substr(0, at);
-#ifdef _WIN32
-        if (_mkdir(part.c_str()) != 0 && errno != EEXIST) return false;
-#else
-        if (mkdir(part.c_str(), 0775) != 0 && errno != EEXIST) return false;
-#endif
+        if (!crosspad::getFileSystem().makeDir(dir.substr(0, at).c_str())) return false;
     }
     return true;
 }
@@ -271,9 +270,16 @@ void loadProgress() {
                     s_progress.bestOf(s));
 }
 
-/* A few hundred bytes, written once when a run ends (the field is frozen
- * behind the result then), so it is written here rather than on a task. */
-void saveProgress() {
+/* The card is written on a task of its own, never on the LVGL thread: a
+ * write can wait on the card for as long as the card likes. The GUI side
+ * hands over the newest text and wakes it; a second save before the first is
+ * written replaces the text. */
+constexpr uint32_t kSaveStackBytes = 4096;
+SemaphoreHandle_t s_saveLock = nullptr;
+TaskHandle_t s_saveTask = nullptr;
+std::string s_saveText;
+
+void writeProgress(const std::string& text) {
     const size_t slash = s_progressPath.rfind('/');
     if (slash != std::string::npos) makeDirs(s_progressPath.substr(0, slash));
     std::FILE* f = std::fopen(s_progressPath.c_str(), "wb");
@@ -281,10 +287,38 @@ void saveProgress() {
         std::printf("[PianoTiles] cannot write %s\n", s_progressPath.c_str());
         return;
     }
-    const std::string text = s_progress.serialize();
     std::fwrite(text.data(), 1, text.size(), f);
     std::fclose(f);
     std::printf("[PianoTiles] progress saved to %s\n", s_progressPath.c_str());
+}
+
+void saveTask(void*) {
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        std::string text;
+        xSemaphoreTake(s_saveLock, portMAX_DELAY);
+        text.swap(s_saveText);
+        xSemaphoreGive(s_saveLock);
+        if (!text.empty()) writeProgress(text);
+    }
+}
+
+void saveProgress() {
+    if (!s_saveLock) s_saveLock = xSemaphoreCreateMutex();
+    xSemaphoreTake(s_saveLock, portMAX_DELAY);
+    s_saveText = s_progress.serialize();
+    xSemaphoreGive(s_saveLock);
+#if defined(ESP_PLATFORM)
+    const uint32_t depth = kSaveStackBytes;   // bytes on ESP-IDF
+#else
+    const uint32_t depth = kSaveStackBytes / sizeof(StackType_t);
+#endif
+    if (!s_saveTask && xTaskCreate(saveTask, "pt_save", depth, nullptr, 1, &s_saveTask) != pdPASS) {
+        s_saveTask = nullptr;
+        std::printf("[PianoTiles] no task to save the progress\n");
+        return;
+    }
+    xTaskNotifyGive(s_saveTask);
 }
 
 /* ── Song menu ───────────────────────────────────────────────────────── */
