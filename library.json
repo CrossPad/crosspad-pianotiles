@@ -1,0 +1,21 @@
+{
+    "name": "crosspad-pianotiles",
+    "version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "description": "Piano Tiles for the pads: tiles fall in four lanes, the pads show what comes, each tile plays the next note of a public-domain tune on a small piano synth; levels speed it up, best scores saved on the card; the one app of the pianotiles firmware kit",
+    "keywords": [
+        "crosspad",
+        "piano",
+        "game",
+        "rhythm",
+        "melody",
+        "lvgl"
+    ],
+    "dependencies": {
+        "crosspad-core": ">=2.0.0,<3.0.0",
+        "crosspad-gui": ">=2.0.0,<3.0.0"
+    },
+    "build": {
+        "appLibrary": true
+    }
+}
