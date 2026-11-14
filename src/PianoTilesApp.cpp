@@ -413,11 +413,15 @@ void openMenu(const MenuItem* items, int count, const char* title, const char* n
     s_ledsStale = true;
 }
 
+void onGameEvents(uint32_t ev);
+
 void pause() {
-    s_screen = Screen::Paused;
     if (s_game.holdingTile() >= 0) {   // a hold cannot survive a pause
-        s_game.release(s_game.tiles()[static_cast<size_t>(s_game.holdingTile())].lane);
+        // Letting go is a move like any other: on the song's last note it clears the song.
+        onGameEvents(s_game.release(s_game.tiles()[static_cast<size_t>(s_game.holdingTile())].lane));
+        if (s_screen != Screen::Game) return;   // that was the last note: the result, not the pause menu
     }
+    s_screen = Screen::Paused;
     s_synth.allOff();
     openMenu(kPauseMenu, 4, "PAUSED", song(s_song).title);
     std::printf("[PianoTiles] paused\n");
