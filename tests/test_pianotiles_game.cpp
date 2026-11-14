@@ -199,6 +199,24 @@ int main() {
         check((evB & kEvHoldBroken) && b.phase() == Phase::Playing && b.holdingTile() < 0, "let go early: broken, playing on");
         check((evA & kEvHoldDone) && a.score() > b.score(), "held through: done, with a bonus");
     }
+    {   // Every built-in song ends on a hold: letting go of it early (a pause does that) still clears the song.
+        bool all = true;
+        for (int s = 0; s < songCount(); ++s) {
+            Game g;
+            g.load(songs()[s], 1);
+            const auto& t = g.tiles();
+            uint32_t ev = 0;
+            for (size_t i = 0; i < t.size(); ++i) {
+                stepTo(g, t[i].beat);
+                ev = g.press(t[i].lane);
+            }
+            const bool held = !(ev & kEvCleared) && g.phase() == Phase::Playing && g.holdingTile() == static_cast<int>(t.size()) - 1;
+            stepTo(g, t.back().beat + 0.5f);
+            ev = g.release(t.back().lane);
+            all = all && held && (ev & kEvHoldBroken) && (ev & kEvCleared) && g.phase() == Phase::Cleared;
+        }
+        check(all, "the last hold let go early: broken and CLEARED in the same events, in every song");
+    }
     {   // The pads: bottom row = hit window, a row per half beat above, heads over bodies.
         Game g;
         g.load(kTestSong, 1);
